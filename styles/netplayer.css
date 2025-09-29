@@ -1,0 +1,219 @@
+#netf-controls-panel {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    z-index: 2147483647;
+    background: linear-gradient(rgba(0, 0, 0, .9), rgba(0, 0, 0, .35));
+    display: flex;
+    padding: 12px 0;
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    color: #fff;
+    opacity: 0;
+    transition: opacity .22s ease;
+    box-sizing: border-box
+}
+
+.netf-section {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    box-sizing: border-box
+}
+
+.netf-section.left {
+    justify-content: flex-start;
+    padding-left: 14px
+}
+
+.netf-section.center {
+    justify-content: center
+}
+
+.netf-section.right {
+    justify-content: flex-end;
+    padding-right: 14px
+}
+
+.netf-btn {
+    background: transparent;
+    border: none;
+    color: #fff;
+    padding: 8px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    transition: all 0.2s ease;
+    min-height: 48px;
+    min-width: 48px;
+    opacity: 0.9;
+}
+
+.netf-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.netf-btn:active {
+    transform: scale(0.9);
+}
+
+.netf-btn svg {
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+}
+
+.netf-btn.primary {
+    color: #e50914;
+    font-weight: 600
+}
+
+.netf-speed {
+    font-weight: 600;
+    padding: 6px 10px;
+    background: rgba(255, 255, 255, .04);
+    border-radius: 6px;
+    font-size: 15px
+}
+
+.netf-vol {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center
+}
+
+.netf-vol input[type=range] {
+    position: absolute;
+    bottom: calc(100% + 75px);
+    left: 50%;
+    transform: translateX(-50%) rotate(-90deg);
+    width: 140px;
+    -webkit-appearance: none;
+    height: 6px;
+    background: rgba(255, 255, 255, .18);
+    border-radius: 4px;
+    outline: none;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .18s, transform .18s;
+    z-index: 2147483660
+}
+
+.netf-vol.show input[type=range] {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) rotate(-90deg) translateY(0)
+}
+
+.netf-speed-menu {
+    display: flex;
+    flex-direction: column;
+    background: rgba(0, 0, 0, .98);
+    border-radius: 6px;
+    padding: 6px;
+    bottom: 100%;
+    margin-bottom: 8px;
+    max-height: 220px;
+    overflow-y: auto;
+    position: absolute;
+    z-index: 2147483648;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity .18s, transform .18s
+}
+
+.netf-speed-menu.show {
+    opacity: 1;
+    transform: translateY(0)
+}
+
+.netf-nav-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 0, 0, .6);
+    border-radius: 50%;
+    padding: 12px;
+    cursor: pointer;
+    z-index: 2147483649;
+    color: #fff;
+    opacity: 0;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.2);
+    min-width: 48px;
+    min-height: 48px;
+}
+
+.netf-nav-btn:hover {
+    background: rgba(229, 9, 20, 0.8);
+    transform: translateY(-50%) scale(1.1);
+}
+
+.netf-nav-btn svg {
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+}
+
+.netf-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, .2);
+    cursor: pointer;
+    z-index: 2147483655;
+    border-radius: 3px;
+    overflow: hidden
+}
+
+.netf-progress-bar {
+    width: 0%;
+    height: 100%;
+    background: #e50914;
+    transition: width .1s linear
+}
+
+.netf-center-indicator {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.8);
+    border-radius: 50%;
+    width: 80px;
+    height: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    color: #fff;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 2147483656;
+    backdrop-filter: blur(10px);
+    border: 2px solid rgba(255,255,255,0.2);
+}
+
+.netf-center-indicator.show {
+    opacity: 1;
+}
+
+.netf-center-indicator svg {
+    width: 32px;
+    height: 32px;
+    fill: currentColor;
+}
