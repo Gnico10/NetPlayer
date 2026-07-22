@@ -1,22 +1,58 @@
 ## NetPlayer Bookmarklet
 
-### Create the bookmarklet
+Controles personalizados para el reproductor de video (pensado para Netflix).
 
-Create a new browser bookmark and paste this as the URL (replace with your hosted `loader.js`):
+### Por qué no usar un script externo
 
-```javascript
-javascript:(function () {let code = document.createElement('script');code.src = 'https://example.com/netplayer/logic/loader.js';document.body.appendChild(code);}())
+Sitios como Netflix aplican **Content Security Policy (CSP)** y bloquean `<script src="...">` y `<link href="...">` de otros dominios. En DevTools puede aparecer **CORB** u otros avisos, pero el fallo real es que el navegador no permite cargar recursos externos en esa página.
+
+**Solución:** usar el bookmarklet autocontenido que inyecta CSS y JS inline (sin peticiones cross-origin).
+
+### Crear el bookmarklet
+
+1. Genera el bookmarklet:
+
+```bash
+node scripts/build-bookmarklet.mjs
 ```
 
-This matches the exact pattern you provided and references a single file that loads everything else.
+2. Copia el contenido de `dist/bookmarklet.txt` como URL del marcador.
 
-### How it works
+3. Abre Netflix (u otra página con `<video>`), haz clic en el marcador y listo.
 
-- The bookmarklet injects `logic/loader.js`.
-- The loader injects `styles/netplayer.css`, then `logic/netplayer.js`.
-- The UI appears over the current page's `<video>` element.
+### Cómo funciona
 
-### Notes
+- El bookmarklet inyecta `styles/netplayer.css` como `<style>`.
+- Luego inyecta, en orden: `config.js` → `icons.js` → `adapters/netflix.js` → `netplayer.js`.
+- La UI aparece sobre el `<video>` de la página.
 
-- The loader computes its base path from `document.currentScript.src`; keep the folder structure as-is.
-- No build step is required; files are used as-is.
+### Desarrollo
+
+Edita los archivos en `logic/` y `styles/`, vuelve a ejecutar el build y actualiza el marcador.
+
+`logic/loader.js` sigue disponible para hostear el proyecto en un servidor propio (páginas sin CSP estricta), pero **no funciona en Netflix**.
+
+### Estructura
+
+```
+logic/
+  config.js              # Constantes y selectores
+  icons.js               # Iconos SVG (window.NetPlayerIcons)
+  adapters/
+    netflix.js           # keySim, seek, navegación, fullscreen
+  netplayer.js           # UI, controles y destroy()
+  loader.js              # Carga remota legacy (solo sitios sin CSP)
+styles/
+  netplayer.css
+scripts/
+  build-bookmarklet.mjs
+dist/
+  bookmarklet.txt        # URL lista para el marcador
+  bookmarklet.js         # Código bootstrap legible
+```
+
+### Notas
+
+- Al cerrar el panel se ejecuta `destroy()`: elimina listeners, timers y nodos del DOM.
+- La navegación prev/next solo aparece si hay patrón `/watch/{id}` o botones nativos detectables.
+- El seek en la barra simula flechas de 10 s (máx. 60 pulsaciones), igual que el reproductor nativo de Netflix.

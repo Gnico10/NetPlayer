@@ -75,6 +75,11 @@
     font-weight: 600
 }
 
+.netf-speed-wrap {
+    position: relative;
+    display: inline-flex
+}
+
 .netf-speed {
     font-weight: 600;
     padding: 6px 10px;
