@@ -2,14 +2,15 @@
   const C = window.NetPlayerConfig;
 
   function hideInterstitial() {
-    document.querySelector(C.interstitialSelector)?.style.setProperty("display", "none");
+    const interstitial = document.querySelector(C.interstitialSelector);
+    if (interstitial) interstitial.style.setProperty("display", "none");
   }
 
   function keySim(video, code, key) {
-    if (!video || video.tagName !== "VIDEO") return;
-    const keyCode =
-      code === "KeyS" ? 83 : code === "ArrowLeft" ? 37 : code === "ArrowRight" ? 39 : 0;
-    ["keydown", "keyup"].forEach((ev) =>
+    if (!video || video.tagName !== "VIDEO") return false;
+
+    const keyCode = code === "KeyS" ? 83 : code === "ArrowLeft" ? 37 : code === "ArrowRight" ? 39 : 0;
+    ["keydown", "keyup"].forEach((ev) => {
       video.dispatchEvent(
         new KeyboardEvent(ev, {
           key,
@@ -19,8 +20,9 @@
           bubbles: true,
           cancelable: true,
         })
-      )
-    );
+      );
+    });
+    return true;
   }
 
   function findNativeButton(selectors) {
@@ -37,7 +39,11 @@
   }
 
   function goToVideo(n) {
-    if (n !== null && n > 0) window.location.pathname = "/watch/" + n;
+    if (n !== null && n > 0) {
+      window.location.pathname = "/watch/" + n;
+      return true;
+    }
+    return false;
   }
 
   function hasEpisodeNavigation() {
@@ -50,10 +56,10 @@
       native.click();
       return true;
     }
+
     const current = getVideoNumber();
     if (current !== null) {
-      goToVideo(current + 1);
-      return true;
+      return goToVideo(current + 1);
     }
     return false;
   }
@@ -64,38 +70,49 @@
       native.click();
       return true;
     }
+
     const current = getVideoNumber();
     if (current !== null && current > 1) {
-      goToVideo(current - 1);
-      return true;
+      return goToVideo(current - 1);
     }
     return false;
   }
 
-  function getFullscreenWrapper(video) {
+  function getFullscreenWrapper(videoEl) {
     for (const selector of C.fullscreenSelectors) {
-      const el = video.closest(selector);
+      const el = videoEl.closest(selector);
       if (el) return el;
     }
-    return video.parentElement;
+    return videoEl.parentElement || document.body;
   }
 
-  function seek(video, pct) {
-    const duration = video.duration;
-    if (!duration || !isFinite(duration)) return;
+  function seek(videoEl, pct) {
+    const duration = Number(videoEl.duration || 0);
+    if (!duration || !Number.isFinite(duration)) return;
 
-    const target = pct * duration;
-    const diff = target - video.currentTime;
+    const target = Math.max(0, Math.min(1, pct)) * duration;
+    const diff = target - videoEl.currentTime;
     const times = Math.round(Math.abs(diff) / C.seekStepSec);
-    const code = diff > 0 ? "ArrowRight" : "ArrowLeft";
+    const code = diff >= 0 ? "ArrowRight" : "ArrowLeft";
     const maxTimes = Math.min(times, C.maxSeekSteps);
 
-    for (let i = 0; i < maxTimes; i++) keySim(video, code, code);
+    for (let i = 0; i < maxTimes; i += 1) keySim(videoEl, code, code);
+  }
+
+  function getTitleInfo() {
+    const fallbackTitle = document.title.replace(/\s*[-–].*$/, "").trim();
+    const episode = document.querySelector('[data-uia="video-title"]')?.textContent || document.querySelector('h1')?.textContent || fallbackTitle;
+    return {
+      title: fallbackTitle,
+      episode,
+      description: document.querySelector('[data-uia="video-description"]')?.textContent || document.querySelector('[data-ui="summary"]')?.textContent || "",
+    };
   }
 
   window.NetPlayerNetflix = {
     hideInterstitial,
     keySim,
+    findNativeButton,
     getVideoNumber,
     goToVideo,
     hasEpisodeNavigation,
@@ -103,5 +120,6 @@
     goToPrevEpisode,
     getFullscreenWrapper,
     seek,
+    getTitleInfo,
   };
 })();

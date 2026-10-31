@@ -2,6 +2,7 @@
   window.NetPlayerConfig = {
     panelId: "netf-controls-panel",
     speeds: [0.5, 1, 1.25, 1.5, 2],
+    defaultPlaybackRate: 1,
     hideDelayMs: 2500,
     volumeHideDelayMs: 1500,
     volumeLeaveDelayMs: 800,
@@ -14,6 +15,7 @@
       'div[class*="VideoContainer"]',
       'div[class*="watch-video-wrapper"]',
       'div[class*="player-container"]',
+      'div[data-uia="video-container"]',
     ],
     nextEpisodeSelectors: [
       'button[data-uia="next-episode-seamless-button"]',

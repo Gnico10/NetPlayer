@@ -3,363 +3,347 @@
   const NF = window.NetPlayerNetflix;
   const icon = window.NetPlayerIcon;
 
+  const prior = window.__netPlayerCleanup;
+  if (prior) {
+    prior();
+    return;
+  }
+
   NF.hideInterstitial();
 
   const video = document.querySelector("video");
   if (!video) {
-    alert("No video found.");
+    alert("Abre un video de Netflix primero.");
     return;
   }
-  if (document.getElementById(C.panelId)) return;
 
-  const container = video.parentElement || document.body;
-  if (!container.style.position) container.style.position = "relative";
-  if (!container.style.overflow) container.style.overflow = "hidden";
+  if (document.getElementById(C.panelId)) {
+    alert("Recarga la página de Netflix antes de abrir la nueva versión.");
+    return;
+  }
+
+  const host = video.parentElement || document.body;
+  const savedPosition = host.style.position;
+  if (getComputedStyle(host).position === "static") host.style.position = "relative";
 
   const cleanup = [];
-  let hideTimer;
-  let volTimer;
-  let centerTimer;
-  let dragging = false;
+  let hideTimer = null;
   let destroyed = false;
 
-  function on(target, event, handler, options) {
-    target.addEventListener(event, handler, options);
-    cleanup.push(() => target.removeEventListener(event, handler, options));
-  }
+  const on = (target, eventName, handler, options) => {
+    target.addEventListener(eventName, handler, options || undefined);
+    cleanup.push(() => target.removeEventListener(eventName, handler, options || undefined));
+  };
 
-  function clearHideTimer() {
-    clearTimeout(hideTimer);
-  }
-
-  function clearVolTimer() {
-    clearTimeout(volTimer);
-  }
-
-  function clearCenterTimer() {
-    clearTimeout(centerTimer);
-  }
+  const createButton = (className, content, titleText, handler) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = className;
+    button.innerHTML = content;
+    button.title = titleText;
+    button.setAttribute("aria-label", titleText);
+    button.addEventListener("click", handler);
+    return button;
+  };
 
   const panel = document.createElement("div");
   panel.id = C.panelId;
-  container.appendChild(panel);
+  panel.className = "np-panel np-hidden";
+  host.appendChild(panel);
 
-  const leftSec = document.createElement("div");
-  leftSec.className = "netf-section left";
-  const centerSec = document.createElement("div");
-  centerSec.className = "netf-section center";
-  const rightSec = document.createElement("div");
-  rightSec.className = "netf-section right";
-
-  const makeBtn = (label, opts = {}) => {
-    const b = document.createElement("button");
-    b.className = "netf-btn" + (opts.p ? " primary" : "");
-    b.title = opts.title || label;
-    b.innerHTML = opts.html || label;
-    b.onclick = opts.onClick || (() => {});
-    return b;
-  };
-
-  const back10 = makeBtn(icon("back10"), {
-    title: "Back 10s",
-    onClick: () => NF.keySim(video, "ArrowLeft", "ArrowLeft"),
-  });
-  const play = makeBtn(icon("play"), {
-    title: "Play/Pause",
-    onClick: () => {
-      video.paused ? video.play() : video.pause();
-      sync();
-    },
-  });
-  const fwd10 = makeBtn(icon("forward10"), {
-    title: "Forward 10s",
-    onClick: () => NF.keySim(video, "ArrowRight", "ArrowRight"),
-  });
-
-  const speedWrap = document.createElement("div");
-  speedWrap.className = "netf-speed-wrap";
-  const speedBtn = makeBtn(`<span class="netf-speed">${video.playbackRate}×</span>`);
-  const speedMenu = document.createElement("div");
-  speedMenu.className = "netf-speed-menu";
-  C.speeds.forEach((s) => {
-    const b = document.createElement("button");
-    b.className = "netf-btn";
-    b.textContent = s + "×";
-    b.onclick = () => {
-      video.playbackRate = s;
-      speedBtn.querySelector(".netf-speed").textContent = s + "×";
-      toggleSpeedMenu(false);
-    };
-    speedMenu.appendChild(b);
-  });
-
-  function toggleSpeedMenu(show) {
-    speedMenu.classList.toggle("show", show);
-    speedMenu.setAttribute("aria-hidden", show ? "false" : "true");
-  }
-
-  on(speedBtn, "mouseenter", () => toggleSpeedMenu(true));
-  on(speedWrap, "mouseleave", () => toggleSpeedMenu(false));
-  on(speedBtn, "click", (e) => {
-    e.stopPropagation();
-    toggleSpeedMenu(!speedMenu.classList.contains("show"));
-  });
-  on(document, "click", (e) => {
-    if (!speedWrap.contains(e.target)) toggleSpeedMenu(false);
-  });
-  speedWrap.appendChild(speedBtn);
-  speedWrap.appendChild(speedMenu);
-  toggleSpeedMenu(false);
-
-  let lastVolume = video.volume;
-  const volWrap = document.createElement("div");
-  volWrap.className = "netf-vol";
-  const volIcon = makeBtn(icon("volume"), {
-    title: "Mute/Unmute",
-    onClick: () => {
-      if (video.muted || video.volume === 0) {
-        video.muted = false;
-        video.volume = lastVolume || 0.5;
-        volIcon.innerHTML = icon("volume");
-      } else {
-        video.muted = true;
-        volIcon.innerHTML = icon("volumeMuted");
-      }
-      showVolume();
-    },
-  });
-  const volSlider = document.createElement("input");
-  volSlider.type = "range";
-  volSlider.min = 0;
-  volSlider.max = 1;
-  volSlider.step = 0.01;
-  volSlider.value = video.volume;
-
-  function setVolumeVisible(visible) {
-    volWrap.classList.toggle("show", visible);
-  }
-
-  function showVolume() {
-    clearVolTimer();
-    setVolumeVisible(true);
-    volTimer = setTimeout(() => setVolumeVisible(false), C.volumeHideDelayMs);
-  }
-
-  on(volSlider, "input", () => {
-    video.volume = parseFloat(volSlider.value);
-    video.muted = false;
-    volIcon.innerHTML = video.volume > 0 ? icon("volume") : icon("volumeMuted");
-    lastVolume = video.volume;
-  });
-  on(volWrap, "mouseenter", () => {
-    clearVolTimer();
-    setVolumeVisible(true);
-  });
-  on(volWrap, "mouseleave", () => {
-    volTimer = setTimeout(() => setVolumeVisible(false), C.volumeLeaveDelayMs);
-  });
-  on(video, "volumechange", () => {
-    if (!video.muted) {
-      volSlider.value = video.volume;
-      lastVolume = video.volume;
-      volIcon.innerHTML = video.volume > 0 ? icon("volume") : icon("volumeMuted");
+  const backToTitle = createButton("np-return np-hidden", icon("return"), "Volver a la información del título", () => {
+    const info = document.querySelector(".np-info");
+    if (info) {
+      info.hidden = false;
+      info.classList.remove("np-hidden");
     }
   });
+  host.appendChild(backToTitle);
 
-  volWrap.append(volIcon, volSlider);
+  const info = document.createElement("div");
+  info.className = "np-info";
+  info.hidden = true;
+  const infoContent = document.createElement("div");
+  infoContent.className = "np-info-content";
+  const infoKicker = document.createElement("div");
+  infoKicker.className = "np-info-kicker";
+  infoKicker.textContent = "Estás viendo";
+  const infoHeading = document.createElement("div");
+  infoHeading.className = "np-info-heading";
+  const infoSeason = document.createElement("div");
+  infoSeason.className = "np-info-season";
+  const infoEpisode = document.createElement("div");
+  infoEpisode.className = "np-info-episode";
+  const infoDescription = document.createElement("p");
+  infoDescription.className = "np-info-description";
+  infoContent.append(infoKicker, infoHeading, infoSeason, infoEpisode, infoDescription);
+  info.appendChild(infoContent);
+  host.appendChild(info);
 
-  const fs = makeBtn(icon("fullscreen"), {
-    title: "Fullscreen",
-    onClick: () => {
-      const wrapper = NF.getFullscreenWrapper(video);
-      if (!document.fullscreenElement) wrapper.requestFullscreen?.();
-      else document.exitFullscreen?.();
-    },
-  });
-  const skip = makeBtn(icon("skip"), {
-    title: "Skip Intro (S)",
-    onClick: () => NF.keySim(video, "KeyS", "KeyS"),
-  });
-  const loopBtn = makeBtn(icon("loop"), {
-    title: "Loop",
-    onClick: () => {
-      video.loop = !video.loop;
-      loopBtn.classList.toggle("primary", video.loop);
-    },
-  });
-  const pipBtn = makeBtn(icon("pip"), {
-    title: "PIP",
-    onClick: async () => {
-      try {
-        if (video !== document.pictureInPictureElement) await video.requestPictureInPicture();
-        else await document.exitPictureInPicture();
-      } catch (e) {
-        console.warn("[NetPlayer] Picture-in-Picture failed:", e);
-      }
-    },
-  });
-
-  leftSec.append(back10, play, fwd10, speedWrap, volWrap);
-  centerSec.append(loopBtn, pipBtn, skip);
-  rightSec.append(fs);
-  panel.append(leftSec, centerSec, rightSec);
-
-  const showEpisodeNav = NF.hasEpisodeNavigation();
-  let prevBtn = null;
-  let nextBtn = null;
-
-  if (showEpisodeNav) {
-    prevBtn = document.createElement("button");
-    prevBtn.className = "netf-nav-btn";
-    prevBtn.innerHTML = icon("prev");
-    prevBtn.title = "Previous";
-    prevBtn.onclick = () => NF.goToPrevEpisode();
-
-    nextBtn = document.createElement("button");
-    nextBtn.className = "netf-nav-btn";
-    nextBtn.innerHTML = icon("next");
-    nextBtn.title = "Next";
-    nextBtn.onclick = () => NF.goToNextEpisode();
-
-    container.appendChild(prevBtn);
-    container.appendChild(nextBtn);
+  function refreshInfo() {
+    const meta = NF.getTitleInfo();
+    infoHeading.textContent = meta.title || "Título";
+    infoEpisode.textContent = meta.episode || "Episodio";
+    infoDescription.textContent = meta.description || "";
+    infoSeason.textContent = "";
+    const visible = Boolean(meta.title || meta.episode || meta.description);
+    info.hidden = !visible;
+    if (!visible) info.classList.add("np-hidden");
+    else info.classList.remove("np-hidden");
   }
 
   const progress = document.createElement("div");
-  progress.className = "netf-progress";
-  const progressBar = document.createElement("div");
-  progressBar.className = "netf-progress-bar";
-  progress.appendChild(progressBar);
-  container.appendChild(progress);
+  progress.className = "np-progress";
+  const currentTime = document.createElement("span");
+  currentTime.className = "np-time np-current";
+  currentTime.textContent = "0:00";
+  const preview = document.createElement("span");
+  preview.className = "np-preview";
+  const seekInput = document.createElement("input");
+  seekInput.type = "range";
+  seekInput.className = "np-seek";
+  seekInput.min = "0";
+  seekInput.max = "1000";
+  seekInput.value = "0";
+  seekInput.step = "1";
+  seekInput.setAttribute("aria-label", "Posición de reproducción");
+  const totalTime = document.createElement("span");
+  totalTime.className = "np-time np-duration";
+  totalTime.textContent = "0:00";
+  const remaining = document.createElement("span");
+  remaining.className = "np-time np-remaining";
+  remaining.textContent = "";
+  progress.append(currentTime, preview, seekInput, totalTime, remaining);
 
-  const centerIndicator = document.createElement("div");
-  centerIndicator.className = "netf-center-indicator";
-  centerIndicator.innerHTML = icon("pause");
-  container.appendChild(centerIndicator);
+  const row = document.createElement("div");
+  row.className = "np-row";
+  panel.append(progress, row);
 
-  function showControls() {
-    panel.style.opacity = "1";
-    if (prevBtn) prevBtn.style.opacity = "1";
-    if (nextBtn) nextBtn.style.opacity = "1";
+  const prevBtn = createButton("np-prev", icon("prev"), "Episodio anterior", () => NF.goToPrevEpisode());
+  const backBtn = createButton("np-back", `${icon("back")}<span class="np-method">10s</span>`, "Retroceder 10 segundos", () => NF.keySim(video, "ArrowLeft", "ArrowLeft"));
+  const playBtn = createButton("np-play", icon("play"), "Reproducir", () => {
+    if (video.paused) video.play(); else video.pause();
+    syncControls();
+  });
+  const forwardBtn = createButton("np-forward", `${icon("forward")}<span class="np-method">10s</span>`, "Adelantar 10 segundos", () => NF.keySim(video, "ArrowRight", "ArrowRight"));
+  const nextBtn = createButton("np-next", icon("next"), "Episodio siguiente", () => NF.goToNextEpisode());
+
+  const speedWrap = document.createElement("label");
+  speedWrap.className = "np-speed-wrap";
+  const speedHint = document.createElement("span");
+  speedHint.className = "np-sr";
+  speedHint.textContent = "Velocidad";
+  const speedSelect = document.createElement("select");
+  speedSelect.className = "np-speed";
+  speedSelect.setAttribute("aria-label", "Velocidad de reproducción");
+  C.speeds.forEach((rate) => {
+    const option = document.createElement("option");
+    option.value = String(rate);
+    option.textContent = `${rate}×`;
+    speedSelect.appendChild(option);
+  });
+  speedSelect.value = String(video.playbackRate || C.defaultPlaybackRate);
+  speedWrap.append(speedHint, speedSelect);
+
+  const muteBtn = createButton("np-mute", icon("volume"), "Silenciar", () => {
+    const muted = video.muted || video.volume === 0;
+    if (muted) {
+      video.muted = false;
+      video.volume = state.lastVolume || 0.5;
+    } else {
+      state.lastVolume = video.volume || 0.5;
+      video.muted = true;
+    }
+    refreshMuteButton();
+  });
+  const volumeInput = document.createElement("input");
+  volumeInput.type = "range";
+  volumeInput.className = "np-volume";
+  volumeInput.min = "0";
+  volumeInput.max = "1";
+  volumeInput.step = "0.01";
+  volumeInput.value = String(video.volume || 0.5);
+
+  const closeBtn = createButton("np-ab np-close", icon("close"), "Cerrar panel", () => destroy());
+  const fullBtn = createButton("np-ab np-full", icon("fullscreen"), "Pantalla completa", () => {
+    const wrapper = NF.getFullscreenWrapper(video);
+    if (!document.fullscreenElement) wrapper.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  });
+  const loopBtn = createButton("np-ab np-loop", icon("loop"), "Repetir", () => {
+    video.loop = !video.loop;
+    loopBtn.setAttribute("aria-pressed", String(video.loop));
+  });
+  const skipBtn = createButton("np-ab np-skip", icon("skip"), "Saltar intro", () => NF.keySim(video, "KeyS", "KeyS"));
+  const pipBtn = createButton("np-ab np-pip", icon("pip"), "Picture-in-Picture", async () => {
+    try {
+      if (document.pictureInPictureElement !== video) await video.requestPictureInPicture();
+      else await document.exitPictureInPicture();
+    } catch (error) {
+      console.warn("[NetPlayer] Picture-in-Picture failed:", error);
+    }
+  });
+
+  row.append(prevBtn, backBtn, playBtn, forwardBtn, nextBtn, speedWrap, muteBtn, volumeInput, closeBtn, fullBtn, loopBtn, skipBtn, pipBtn);
+
+  const sidePrev = createButton("np-side np-prev np-hidden", `${icon("prev")}<span class="np-method">ID</span>`, "Episodio anterior", () => NF.goToPrevEpisode());
+  const sideNext = createButton("np-side np-next np-hidden", `${icon("next")}<span class="np-method">ID</span>`, "Episodio siguiente", () => NF.goToNextEpisode());
+  sidePrev.hidden = true;
+  sideNext.hidden = true;
+  host.append(sidePrev, sideNext);
+
+  const state = { lastVolume: Math.max(0, Math.min(1, video.volume || 0.5)), hideTimer: null };
+
+  function refreshMuteButton() {
+    const muted = video.muted || video.volume === 0;
+    muteBtn.innerHTML = muted ? icon("mute") : icon("volume");
+    muteBtn.setAttribute("aria-label", muted ? "Desilenciar" : "Silenciar");
   }
 
-  function hideControls() {
-    panel.style.opacity = "0";
-    if (prevBtn) prevBtn.style.opacity = "0";
-    if (nextBtn) nextBtn.style.opacity = "0";
+  function setPanelVisible(visible) {
+    panel.classList.toggle("np-hidden", !visible);
+    backToTitle.classList.toggle("np-hidden", !visible);
   }
 
   function startHideTimer() {
-    clearHideTimer();
-    hideTimer = setTimeout(hideControls, C.hideDelayMs);
+    clearTimeout(state.hideTimer);
+    state.hideTimer = setTimeout(() => setPanelVisible(false), C.hideDelayMs);
   }
 
-  on(container, "mouseenter", () => {
-    showControls();
+  function formatTime(value) {
+    const safe = Math.max(0, Number.isFinite(value) ? value : 0);
+    const totalSeconds = Math.floor(safe);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    if (hours > 0) return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    return `${minutes}:${String(seconds).padStart(2, "0")}`;
+  }
+
+  function updateSeek() {
+    if (!Number.isFinite(video.duration) || video.duration <= 0) {
+      currentTime.textContent = "0:00";
+      totalTime.textContent = "0:00";
+      remaining.textContent = "";
+      seekInput.value = "0";
+      return;
+    }
+
+    const current = Number(video.currentTime || 0);
+    const total = Number(video.duration || 0);
+    seekInput.value = String((current / total) * 1000);
+    currentTime.textContent = formatTime(current);
+    totalTime.textContent = formatTime(total);
+    remaining.textContent = `-${formatTime(Math.max(0, total - current))}`;
+  }
+
+  function syncControls() {
+    playBtn.innerHTML = video.paused ? icon("play") : icon("pause");
+    playBtn.setAttribute("aria-label", video.paused ? "Reproducir" : "Pausar");
+    refreshMuteButton();
+    if (Number.isFinite(video.duration)) totalTime.textContent = formatTime(video.duration);
+    updateSeek();
+  }
+
+  on(video, "timeupdate", updateSeek);
+  on(video, "loadedmetadata", updateSeek);
+  on(video, "play", syncControls);
+  on(video, "pause", syncControls);
+  on(video, "volumechange", () => {
+    volumeInput.value = String(video.volume || 0);
+    refreshMuteButton();
+  });
+  on(seekInput, "input", () => {
+    if (!Number.isFinite(video.duration) || video.duration <= 0) return;
+    const nextTime = (Number(seekInput.value) / 1000) * video.duration;
+    video.currentTime = Math.min(Math.max(nextTime, 0), video.duration);
+  });
+  on(volumeInput, "input", () => {
+    const value = Number(volumeInput.value);
+    video.volume = value;
+    video.muted = value === 0;
+    state.lastVolume = value || 0.5;
+    refreshMuteButton();
+  });
+  on(speedSelect, "change", () => {
+    const rate = Number(speedSelect.value);
+    if (Number.isFinite(rate)) video.playbackRate = rate;
+  });
+
+  on(host, "mouseenter", () => {
+    setPanelVisible(true);
     startHideTimer();
   });
-  on(container, "mousemove", () => {
-    showControls();
+  on(host, "mousemove", () => {
+    setPanelVisible(true);
     startHideTimer();
   });
-  on(container, "mouseleave", () => {
-    hideControls();
-    clearHideTimer();
+  on(host, "mouseleave", () => {
+    setPanelVisible(false);
+    clearTimeout(state.hideTimer);
   });
 
-  function updateProgress() {
-    progressBar.style.width = ((video.currentTime / video.duration) * 100 || 0) + "%";
-  }
-
-  on(video, "timeupdate", updateProgress);
-
-  function seekByMouse(e) {
-    const rect = progress.getBoundingClientRect();
-    let pct = (e.clientX - rect.left) / rect.width;
-    pct = Math.max(0, Math.min(1, pct));
-    NF.seek(video, pct);
-  }
-
-  on(progress, "mousedown", (e) => {
-    dragging = true;
-    seekByMouse(e);
-  });
-  on(document, "mousemove", (e) => {
-    if (dragging) seekByMouse(e);
-  });
-  on(document, "mouseup", () => {
-    dragging = false;
-  });
-
-  function updateNavButtons() {
-    if (!prevBtn || !nextBtn) return;
-    const cRect = container.getBoundingClientRect();
-    const vRect = video.getBoundingClientRect();
-    const relTop = vRect.top - cRect.top;
-    const relLeft = vRect.left - cRect.left;
-    prevBtn.style.top = relTop + vRect.height / 2 + "px";
-    prevBtn.style.left = relLeft + 8 + "px";
-    prevBtn.style.transform = "translateY(-50%)";
-    nextBtn.style.top = relTop + vRect.height / 2 + "px";
-    nextBtn.style.left = relLeft + vRect.width - (nextBtn.offsetWidth + 8) + "px";
-    nextBtn.style.transform = "translateY(-50%)";
-  }
-
-  if (showEpisodeNav) {
-    updateNavButtons();
-    on(window, "resize", updateNavButtons);
-    on(window, "scroll", updateNavButtons);
-    const observer = new MutationObserver(updateNavButtons);
-    observer.observe(video, { attributes: true, attributeFilter: ["style", "class"] });
-    cleanup.push(() => observer.disconnect());
-  }
-
-  function sync() {
-    play.innerHTML = video.paused ? icon("play") : icon("pause");
-    centerIndicator.innerHTML = video.paused ? icon("play") : icon("pause");
-  }
-
-  function showCenterIndicator() {
-    centerIndicator.classList.add("show");
-    clearCenterTimer();
-    centerTimer = setTimeout(() => centerIndicator.classList.remove("show"), C.centerIndicatorMs);
-  }
-
-  on(video, "play", () => {
-    sync();
-    showCenterIndicator();
-  });
-  on(video, "pause", () => {
-    sync();
-    showCenterIndicator();
-  });
   on(video, "click", () => {
-    video.paused ? video.play() : video.pause();
-    sync();
-    showCenterIndicator();
+    if (video.paused) video.play(); else video.pause();
+    syncControls();
+    setPanelVisible(true);
+    startHideTimer();
   });
 
-  sync();
-  updateProgress();
-  showControls();
-  startHideTimer();
+  on(document, "keydown", (event) => {
+    if (event.target && ["INPUT", "SELECT", "TEXTAREA"].includes(event.target.tagName)) return;
+    if (event.code === "ArrowLeft") NF.keySim(video, "ArrowLeft", "ArrowLeft");
+    if (event.code === "ArrowRight") NF.keySim(video, "ArrowRight", "ArrowRight");
+    if (event.code === "Space") {
+      event.preventDefault();
+      if (video.paused) video.play(); else video.pause();
+      syncControls();
+    }
+  });
 
-  function destroy() {
+  function updateEpisodeButtons() {
+    const hasNav = NF.hasEpisodeNavigation();
+    sidePrev.hidden = !hasNav;
+    sideNext.hidden = !hasNav;
+    sidePrev.classList.toggle("np-hidden", !hasNav);
+    sideNext.classList.toggle("np-hidden", !hasNav);
+
+    if (hasNav && video && host) {
+      const hostRect = host.getBoundingClientRect();
+      const videoRect = video.getBoundingClientRect();
+      const top = videoRect.top - hostRect.top + videoRect.height / 2;
+      const leftOffset = Math.max(12, videoRect.left - hostRect.left - 12);
+      const rightOffset = Math.max(12, hostRect.width - (videoRect.right - hostRect.left) + 12);
+      sidePrev.style.top = `${top}px`;
+      sidePrev.style.left = `${leftOffset}px`;
+      sideNext.style.top = `${top}px`;
+      sideNext.style.right = `${rightOffset}px`;
+    }
+  }
+
+  on(window, "resize", updateEpisodeButtons);
+  on(window, "scroll", updateEpisodeButtons);
+  updateEpisodeButtons();
+
+  const destroy = () => {
     if (destroyed) return;
     destroyed = true;
-
-    clearHideTimer();
-    clearVolTimer();
-    clearCenterTimer();
+    clearTimeout(state.hideTimer);
     cleanup.forEach((fn) => fn());
-
     panel.remove();
-    progress.remove();
-    centerIndicator.remove();
-    prevBtn?.remove();
-    nextBtn?.remove();
-  }
+    backToTitle.remove();
+    info.remove();
+    sidePrev.remove();
+    sideNext.remove();
+    if (host.style.position === "relative" && savedPosition === "") host.style.position = "";
+    else if (savedPosition) host.style.position = savedPosition;
+    window.__netPlayerCleanup = null;
+  };
 
-  const close = makeBtn(icon("close"), { title: "Close Panel", onClick: destroy });
-  rightSec.append(close);
+  window.__netPlayerCleanup = destroy;
+  refreshInfo();
+  refreshMuteButton();
+  syncControls();
+  setPanelVisible(true);
+  startHideTimer();
 })();
